@@ -5,7 +5,7 @@ mod loader;
 
 use libc::c_char;
 
-/// # Safety 
+/// # Safety
 /// This is the entry point of the program
 /// We cannot use the main because rust will abort if we don't have std{in/out/err}
 /// https://github.com/rust-lang/rust/blob/3071aefdb2821439e2e6f592f41a4d28e40c1e79/library/std/src/sys/unix/mod.rs#L80
