@@ -12,14 +12,8 @@ goblin = { git = "https://github.com/tiann/goblin" }
 scroll = "0.12"
 
 anyhow = "1"
-# nix = { version = "0.27", features = [ "kmod", "mount", "fs", "process" ] }
-rustix = { version = "0.38", features = ["mount", "fs", "runtime"] }
+rustix = { git = "https://github.com/yujincheng08/rustix.git", rev = "init_module", features = ["mount", "fs", "runtime"] }
 ashmem = "0.1"
-# libc = "0.2"
-syscalls = { version = "0.6", default-features = false, features = [
-    "aarch64",
-    "x86_64",
-] }
 
 # for kmsg logging
 log = "0.4"

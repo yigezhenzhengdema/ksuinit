@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use goblin::elf::{section_header, sym::Sym, Elf};
+use rustix::{cstr, runtime::init_module};
 use scroll::{ctx::SizeWith, Pwrite};
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::fs;
-use syscalls::{syscall, Sysno};
 
 const KPTR_RESTRICT: &str = "/proc/sys/kernel/kptr_restrict";
 
@@ -85,10 +86,15 @@ pub fn load_module(path: &str) -> Result<()> {
     for ele in modifications {
         buffer.pwrite_with(ele.0, ele.1, ctx)?;
     }
-
-    if let Err(_) = unsafe { syscall!(Sysno::init_module, buffer.as_ptr(), "".as_ptr()) } {
-        Err(anyhow!("Cannot load module"))?;
+    unsafe {
+        let errno = init_module(
+            buffer.as_ptr() as *const c_void,
+            buffer.len() as u32,
+            cstr!(""),
+        ).raw_os_error();
+        if errno != 0 {
+            return Err(anyhow!("Cannot load module"));
+        }
     }
-
     Ok(())
 }
