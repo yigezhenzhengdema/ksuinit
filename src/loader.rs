@@ -1,9 +1,9 @@
+use anyhow::{anyhow, Context, Result};
 use goblin::elf::{section_header, sym::Sym, Elf};
 use scroll::{ctx::SizeWith, Pwrite};
 use std::collections::HashMap;
-
-use anyhow::{Context, Result};
 use std::fs;
+use syscalls::{syscall, Sysno};
 
 const KPTR_RESTRICT: &str = "/proc/sys/kernel/kptr_restrict";
 
@@ -86,8 +86,9 @@ pub fn load_module(path: &str) -> Result<()> {
         buffer.pwrite_with(ele.0, ele.1, ctx)?;
     }
 
-    nix::kmod::init_module(&buffer, &std::ffi::CString::new("").unwrap())
-        .with_context(|| "Cannot load module")?;
+    if let Err(_) = unsafe { syscall!(Sysno::init_module, buffer.as_ptr(), "".as_ptr()) } {
+        Err(anyhow!("Cannot load module"))?;
+    }
 
     Ok(())
 }

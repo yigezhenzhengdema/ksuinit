@@ -1,13 +1,16 @@
-use std::{
-    os::unix::fs::{DirBuilderExt, PermissionsExt},
-    path::Path,
-};
-
 use std::io::Write;
 
-use anyhow::Result;
-
 use crate::loader::load_module;
+use anyhow::Result;
+use rustix::fs::{chmodat, symlink, unlink, AtFlags, Mode};
+use rustix::{
+    fd::AsFd,
+    fs::{access, makedev, mkdir, mknodat, Access, FileType, CWD},
+    mount::{
+        fsmount, fsopen, move_mount, unmount, FsMountFlags, FsOpenFlags, MountAttrFlags,
+        MoveMountFlags, UnmountFlags,
+    },
+};
 
 struct AutoUmount {
     mountpoints: Vec<String>,
@@ -16,7 +19,7 @@ struct AutoUmount {
 impl Drop for AutoUmount {
     fn drop(&mut self) {
         for mountpoint in self.mountpoints.iter().rev() {
-            if let Err(e) = nix::mount::umount(mountpoint.as_str()) {
+            if let Err(e) = unmount(mountpoint.as_str(), UnmountFlags::DETACH) {
                 log::error!("Cannot umount {}: {}", mountpoint, e)
             }
         }
@@ -26,28 +29,33 @@ impl Drop for AutoUmount {
 fn prepare_mount() -> AutoUmount {
     let mut mountpoints = vec![];
 
-    let _ = std::fs::DirBuilder::new().mode(0o755).create("/proc");
-    let result = nix::mount::mount(
-        Some("proc"),
-        "/proc",
-        Some("proc"),
-        nix::mount::MsFlags::empty(),
-        None::<&str>,
-    );
-
+    // mount procfs
+    let result = mkdir("/proc", Mode::from_raw_mode(0o755))
+        .and_then(|_| fsopen("proc", FsOpenFlags::FSOPEN_CLOEXEC))
+        .and_then(|fd| {
+            fsmount(
+                fd.as_fd(),
+                FsMountFlags::FSMOUNT_CLOEXEC,
+                MountAttrFlags::empty(),
+            )
+        })
+        .and_then(|fd| move_mount(fd.as_fd(), "", CWD, "/proc", MoveMountFlags::empty()));
     if result.is_ok() {
         mountpoints.push("/proc".to_string());
     }
 
     // mount sysfs
-    let _ = std::fs::DirBuilder::new().mode(0o755).create("/sys");
-    let result = nix::mount::mount(
-        Some("sysfs"),
-        "/sys",
-        Some("sysfs"),
-        nix::mount::MsFlags::empty(),
-        None::<&str>,
-    );
+
+    let result = mkdir("/sys", Mode::from_raw_mode(0o755))
+        .and_then(|_| fsopen("sysfs", FsOpenFlags::FSOPEN_CLOEXEC))
+        .and_then(|fd| {
+            fsmount(
+                fd.as_fd(),
+                FsMountFlags::FSMOUNT_CLOEXEC,
+                MountAttrFlags::empty(),
+            )
+        })
+        .and_then(|fd| move_mount(fd.as_fd(), "", CWD, "/sys", MoveMountFlags::empty()));
 
     if result.is_ok() {
         mountpoints.push("/sys".to_string());
@@ -58,17 +66,21 @@ fn prepare_mount() -> AutoUmount {
 
 fn setup_kmsg() {
     const KMSG: &str = "/dev/kmsg";
-    let mut device = KMSG;
-    if !Path::new(KMSG).exists() {
-        // we can do nothing if mkdnod failed
-        let _ = nix::sys::stat::mknod(
-            "/kmsg",
-            nix::sys::stat::SFlag::S_IFCHR,
-            nix::sys::stat::Mode::from_bits(0o666).unwrap(),
-            libc::makedev(1, 11),
-        );
-        device = "/kmsg";
-    }
+    let device = match access(KMSG, Access::EXISTS) {
+        Ok(_) => KMSG,
+        Err(_) => {
+            // try to create it
+            mknodat(
+                CWD,
+                "/kmsg",
+                FileType::CharacterDevice,
+                0o666.into(),
+                makedev(1, 11),
+            )
+            .ok();
+            "/kmsg"
+        }
+    };
 
     // Disable kmsg rate limiting
     if let Ok(mut rate) = std::fs::File::options()
@@ -95,18 +107,22 @@ pub fn init() -> Result<()> {
     }
 
     // And now we should prepare the real init to transfer control to it
-    let _ = nix::unistd::unlink("/init");
+    unlink("/init")?;
 
-    let mut real_init = "init.real";
-    if !Path::new(real_init).exists() {
-        // no real init, these is the GKI ramdisk, the real init is in /system/bin/init
-        real_init = "/system/bin/init";
-    }
+    let real_init = match access("/init.real", Access::EXISTS) {
+        Ok(_) => "init.real",
+        Err(_) => "/system/bin/init",
+    };
 
     log::info!("init is {}", real_init);
-    nix::unistd::symlinkat(real_init, None, "/init")?;
+    symlink(real_init, "/init")?;
 
-    let _ = std::fs::set_permissions("/init", std::fs::Permissions::from_mode(0o755));
+    chmodat(
+        CWD,
+        "/init",
+        Mode::from_raw_mode(0o755),
+        AtFlags::SYMLINK_NOFOLLOW,
+    )?;
 
     Ok(())
 }
