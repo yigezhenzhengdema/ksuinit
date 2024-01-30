@@ -1,6 +1,6 @@
 use goblin::elf::{section_header, sym::Sym, Elf};
 use scroll::{ctx::SizeWith, Pwrite};
-use std::{cmp::min, collections::HashMap};
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -25,33 +25,30 @@ impl Drop for Kptr {
     }
 }
 
-fn trim_symbol(input: &str) -> &str {
-    let pos_dollar = input.find('$').unwrap_or(input.len());
-    let pos_dot = input.find('.').unwrap_or(input.len());
-    let min_pos = std::cmp::min(pos_dollar, pos_dot);
-    &input[0..min_pos]
-}
-
 fn parse_kallsyms() -> Result<HashMap<String, u64>> {
     let _dontdrop = Kptr::new()?;
 
-    let kallsyms = "/proc/kallsyms";
-    let mut map = HashMap::new();
-    let content = fs::read_to_string(kallsyms)?;
-    for line in content.lines() {
-        let splits = line.split_whitespace().collect::<Vec<&str>>();
-        if splits.len() < 3 {
-            continue;
-        }
+    let allsyms = fs::read_to_string("/proc/kallsyms")?
+        .lines()
+        .map(|line| line.split_whitespace())
+        .filter_map(|mut splits| {
+            splits
+                .nth(0)
+                .and_then(|addr| u64::from_str_radix(addr, 16).ok())
+                .and_then(|addr| splits.nth(1).and_then(|symbol| Some((symbol, addr))))
+        })
+        .map(|(symbol, addr)| {
+            (
+                symbol
+                    .find(['$', '.'])
+                    .map_or(symbol, |pos| &symbol[0..pos])
+                    .to_owned(),
+                addr,
+            )
+        })
+        .collect::<HashMap<_, _>>();
 
-        let symbol = splits[2];
-        let addr_str = splits[0];
-        let addr = u64::from_str_radix(addr_str, 16)?;
-        let symbol_trimmed = trim_symbol(symbol);
-        
-        map.insert(symbol_trimmed.to_string(), addr);
-    }
-    Ok(map)
+    Ok(allsyms)
 }
 
 pub fn load_module(path: &str) -> Result<()> {
