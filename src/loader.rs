@@ -1,6 +1,6 @@
 use goblin::elf::{section_header, sym::Sym, Elf};
 use scroll::{ctx::SizeWith, Pwrite};
-use std::collections::HashMap;
+use std::{cmp::min, collections::HashMap};
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -25,6 +25,13 @@ impl Drop for Kptr {
     }
 }
 
+fn trim_symbol(input: &str) -> &str {
+    let pos_dollar = input.find('$').unwrap_or(input.len());
+    let pos_dot = input.find('.').unwrap_or(input.len());
+    let min_pos = std::cmp::min(pos_dollar, pos_dot);
+    &input[0..min_pos]
+}
+
 fn parse_kallsyms() -> Result<HashMap<String, u64>> {
     let _dontdrop = Kptr::new()?;
 
@@ -40,8 +47,9 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
         let symbol = splits[2];
         let addr_str = splits[0];
         let addr = u64::from_str_radix(addr_str, 16)?;
-
-        map.insert(symbol.to_string(), addr);
+        let symbol_trimmed = trim_symbol(symbol);
+        
+        map.insert(symbol_trimmed.to_string(), addr);
     }
     Ok(map)
 }
