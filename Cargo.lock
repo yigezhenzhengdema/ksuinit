@@ -117,7 +117,7 @@ dependencies = [
 [[package]]
 name = "rustix"
 version = "0.38.30"
-source = "git+https://github.com/yujincheng08/rustix.git?rev=5312d327552d8d832125edfc72d2f2762238d23b#5312d327552d8d832125edfc72d2f2762238d23b"
+source = "git+https://github.com/yujincheng08/rustix.git?branch=init_module#a9da7ff3512616d6b69c2962f0b4b4f7f00c6ba9"
 dependencies = [
  "bitflags",
  "errno",
