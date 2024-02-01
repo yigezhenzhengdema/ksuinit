@@ -8,8 +8,8 @@ use rustix::{
     fd::AsFd,
     fs::{access, makedev, mkdir, mknodat, Access, FileType, CWD},
     mount::{
-        fsmount, fsopen, move_mount, unmount, FsMountFlags, FsOpenFlags, MountAttrFlags,
-        MoveMountFlags, UnmountFlags,
+        fsconfig_create, fsmount, fsopen, move_mount, unmount, FsMountFlags, FsOpenFlags,
+        MountAttrFlags, MoveMountFlags, UnmountFlags,
     },
 };
 
@@ -37,6 +37,7 @@ fn prepare_mount() -> AutoUmount {
             _ => Err(err),
         })
         .and_then(|_| fsopen("proc", FsOpenFlags::FSOPEN_CLOEXEC))
+        .and_then(|fd| fsconfig_create(fd.as_fd()).map(|_| fd))
         .and_then(|fd| {
             fsconfig_create(fd.as_fd())?;
             fsmount(
@@ -66,6 +67,7 @@ fn prepare_mount() -> AutoUmount {
             _ => Err(err),
         })
         .and_then(|_| fsopen("sysfs", FsOpenFlags::FSOPEN_CLOEXEC))
+        .and_then(|fd| fsconfig_create(fd.as_fd()).map(|_| fd))
         .and_then(|fd| {
             fsconfig_create(fd.as_fd())?;
             fsmount(

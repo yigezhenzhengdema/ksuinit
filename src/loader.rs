@@ -34,9 +34,9 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
         .map(|line| line.split_whitespace())
         .filter_map(|mut splits| {
             splits
-                .nth(0)
+                .next()
                 .and_then(|addr| u64::from_str_radix(addr, 16).ok())
-                .and_then(|addr| splits.nth(1).and_then(|symbol| Some((symbol, addr))))
+                .and_then(|addr| splits.nth(1).map(|symbol| (symbol, addr)))
         })
         .map(|(symbol, addr)| {
             (
