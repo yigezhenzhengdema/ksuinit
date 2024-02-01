@@ -91,7 +91,8 @@ pub fn load_module(path: &str) -> Result<()> {
             buffer.as_ptr() as *const c_void,
             buffer.len() as u32,
             cstr!(""),
-        ).raw_os_error();
+        )
+        .raw_os_error();
         if errno != 0 {
             return Err(anyhow!("Cannot load module"));
         }

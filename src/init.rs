@@ -1,8 +1,9 @@
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 
 use crate::loader::load_module;
 use anyhow::Result;
 use rustix::fs::{chmodat, symlink, unlink, AtFlags, Mode};
+use rustix::mount::fsconfig_create;
 use rustix::{
     fd::AsFd,
     fs::{access, makedev, mkdir, mknodat, Access, FileType, CWD},
@@ -31,34 +32,61 @@ fn prepare_mount() -> AutoUmount {
 
     // mount procfs
     let result = mkdir("/proc", Mode::from_raw_mode(0o755))
+        .or_else(|err| match err.kind() {
+            ErrorKind::AlreadyExists => Ok(()),
+            _ => Err(err),
+        })
         .and_then(|_| fsopen("proc", FsOpenFlags::FSOPEN_CLOEXEC))
         .and_then(|fd| {
+            fsconfig_create(fd.as_fd())?;
             fsmount(
                 fd.as_fd(),
                 FsMountFlags::FSMOUNT_CLOEXEC,
                 MountAttrFlags::empty(),
             )
         })
-        .and_then(|fd| move_mount(fd.as_fd(), "", CWD, "/proc", MoveMountFlags::empty()));
-    if result.is_ok() {
-        mountpoints.push("/proc".to_string());
+        .and_then(|fd| {
+            move_mount(
+                fd.as_fd(),
+                "",
+                CWD,
+                "/proc",
+                MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
+            )
+        });
+    match result {
+        Ok(_) => mountpoints.push("/proc".to_string()),
+        Err(e) => log::error!("Cannot mount procfs: {:?}", e),
     }
 
     // mount sysfs
-
     let result = mkdir("/sys", Mode::from_raw_mode(0o755))
+        .or_else(|err| match err.kind() {
+            ErrorKind::AlreadyExists => Ok(()),
+            _ => Err(err),
+        })
         .and_then(|_| fsopen("sysfs", FsOpenFlags::FSOPEN_CLOEXEC))
         .and_then(|fd| {
+            fsconfig_create(fd.as_fd())?;
             fsmount(
                 fd.as_fd(),
                 FsMountFlags::FSMOUNT_CLOEXEC,
                 MountAttrFlags::empty(),
             )
         })
-        .and_then(|fd| move_mount(fd.as_fd(), "", CWD, "/sys", MoveMountFlags::empty()));
+        .and_then(|fd| {
+            move_mount(
+                fd.as_fd(),
+                "",
+                CWD,
+                "/sys",
+                MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
+            )
+        });
 
-    if result.is_ok() {
-        mountpoints.push("/sys".to_string());
+    match result {
+        Ok(_) => mountpoints.push("/sys".to_string()),
+        Err(e) => log::error!("Cannot mount sysfs: {:?}", e),
     }
 
     AutoUmount { mountpoints }
@@ -82,6 +110,10 @@ fn setup_kmsg() {
         }
     };
 
+    let _ = kernlog::init_with_device(device);
+}
+
+fn unlimit_kmsg() {
     // Disable kmsg rate limiting
     if let Ok(mut rate) = std::fs::File::options()
         .write(true)
@@ -89,17 +121,19 @@ fn setup_kmsg() {
     {
         writeln!(rate, "on").ok();
     }
-
-    let _ = kernlog::init_with_device(device);
 }
 
 pub fn init() -> Result<()> {
-    // mount /proc and /sys to access kernel interface
-    let _dontdrop = prepare_mount();
-
+    // Setup kernel log first
     setup_kmsg();
 
     log::info!("Hello, KernelSU!");
+
+    // mount /proc and /sys to access kernel interface
+    let _dontdrop = prepare_mount();
+
+    // This relies on the fact that we have /proc mounted
+    unlimit_kmsg();
 
     // insmod kernelsu module
     if let Err(e) = load_module("/kernelsu.ko") {
