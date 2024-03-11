@@ -55,7 +55,7 @@ pub fn load_module(path: &str) -> Result<()> {
     let mut buffer = fs::read(path).with_context(|| format!("Cannot read file: {path}"))?;
     let elf = Elf::parse(&buffer)?;
 
-    let kernel_symbols = parse_kallsyms()?;
+    let kernel_symbols = parse_kallsyms().with_context(|| format!("Cannot parse kallsyms"))?;
 
     let mut modifications = Vec::new();
     for (index, mut sym) in elf.syms.iter().enumerate() {
@@ -85,6 +85,6 @@ pub fn load_module(path: &str) -> Result<()> {
     for ele in modifications {
         buffer.pwrite_with(ele.0, ele.1, ctx)?;
     }
-    init_module(&buffer, cstr!(""))?;
+    init_module(&buffer, cstr!("")).with_context(|| format!("init_module failed."))?;
     Ok(())
 }

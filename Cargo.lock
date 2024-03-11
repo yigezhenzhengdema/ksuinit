@@ -53,6 +53,7 @@ dependencies = [
  "log",
  "rustix",
  "scroll",
+ "syscalls",
 ]
 
 [[package]]
@@ -139,6 +140,12 @@ dependencies = [
  "quote",
  "unicode-ident",
 ]
+
+[[package]]
+name = "syscalls"
+version = "0.6.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56b389b38331a454883a34fd19f25cbd1510b3510ff7aa28cb8d6de85d888439"
 
 [[package]]
 name = "unicode-ident"

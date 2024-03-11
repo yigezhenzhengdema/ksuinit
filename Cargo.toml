@@ -14,6 +14,11 @@ scroll = "0.12"
 anyhow = "1"
 rustix = { git = "https://github.com/bytecodealliance/rustix", rev = "7b44528", features = ["mount", "fs", "runtime", "system"] }
 
+syscalls = { version = "0.6", default-features = false, features = [
+    "aarch64",
+    "x86_64",
+] }
+
 # for kmsg logging
 log = "0.4"
 kernlog = { git = "https://github.com/tiann/kernlog.rs" }

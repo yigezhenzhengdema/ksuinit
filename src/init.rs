@@ -3,7 +3,6 @@ use std::io::{ErrorKind, Write};
 use crate::loader::load_module;
 use anyhow::Result;
 use rustix::fs::{chmodat, symlink, unlink, AtFlags, Mode};
-use rustix::mount::fsconfig_create;
 use rustix::{
     fd::AsFd,
     fs::{access, makedev, mkdir, mknodat, Access, FileType, CWD},
@@ -39,7 +38,6 @@ fn prepare_mount() -> AutoUmount {
         .and_then(|_| fsopen("proc", FsOpenFlags::FSOPEN_CLOEXEC))
         .and_then(|fd| fsconfig_create(fd.as_fd()).map(|_| fd))
         .and_then(|fd| {
-            fsconfig_create(fd.as_fd())?;
             fsmount(
                 fd.as_fd(),
                 FsMountFlags::FSMOUNT_CLOEXEC,
@@ -69,7 +67,6 @@ fn prepare_mount() -> AutoUmount {
         .and_then(|_| fsopen("sysfs", FsOpenFlags::FSOPEN_CLOEXEC))
         .and_then(|fd| fsconfig_create(fd.as_fd()).map(|_| fd))
         .and_then(|fd| {
-            fsconfig_create(fd.as_fd())?;
             fsmount(
                 fd.as_fd(),
                 FsMountFlags::FSMOUNT_CLOEXEC,
@@ -137,9 +134,13 @@ pub fn init() -> Result<()> {
     // This relies on the fact that we have /proc mounted
     unlimit_kmsg();
 
-    // insmod kernelsu module
-    if let Err(e) = load_module("/kernelsu.ko") {
-        log::error!("Cannot load kernelsu module: {}", e);
+    if has_kernelsu() {
+        log::info!("KernelSU may be already loaded in kernel, skip!");
+    } else {
+        log::info!("Loading kernelsu.ko..");
+        if let Err(e) = load_module("/kernelsu.ko") {
+            log::error!("Cannot load kernelsu.ko: {}", e);
+        }
     }
 
     // And now we should prepare the real init to transfer control to it
@@ -161,4 +162,22 @@ pub fn init() -> Result<()> {
     )?;
 
     Ok(())
+}
+
+fn has_kernelsu() -> bool {
+    use syscalls::{syscall, Sysno};
+    let mut version = 0;
+    const CMD_GET_VERSION: i32 = 2;
+    unsafe {
+        let _ = syscall!(
+            Sysno::prctl,
+            0xDEADBEEF,
+            CMD_GET_VERSION,
+            std::ptr::addr_of_mut!(version)
+        );
+    }
+
+    log::info!("KernelSU version: {}", version);
+
+    version != 0
 }
