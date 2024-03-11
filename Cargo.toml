@@ -12,8 +12,7 @@ goblin = { git = "https://github.com/tiann/goblin" }
 scroll = "0.12"
 
 anyhow = "1"
-rustix = { git = "https://github.com/yujincheng08/rustix.git", branch = "init_module", features = ["mount", "fs", "runtime"] }
-ashmem = "0.1"
+rustix = { git = "https://github.com/bytecodealliance/rustix", rev = "7b44528", features = ["mount", "fs", "runtime", "system"] }
 
 # for kmsg logging
 log = "0.4"
