@@ -22,7 +22,7 @@ impl Drop for AutoUmount {
     fn drop(&mut self) {
         for mountpoint in self.mountpoints.iter().rev() {
             if let Err(e) = unmount(mountpoint.as_str(), UnmountFlags::DETACH) {
-                log::error!("Cannot umount {}: {}", mountpoint, e)
+                log::error!("{} {}: {}", s!("Cannot umount"), mountpoint, e)
             }
         }
     }
@@ -57,7 +57,7 @@ fn prepare_mount() -> AutoUmount {
         });
     match result {
         Ok(_) => mountpoints.push("/proc".to_string()),
-        Err(e) => log::error!("Cannot mount procfs: {:?}", e),
+        Err(e) => log::error!("{} {:?}", s!("Cannot mount procfs: "), e),
     }
 
     // mount sysfs
@@ -87,7 +87,7 @@ fn prepare_mount() -> AutoUmount {
 
     match result {
         Ok(_) => mountpoints.push("/sys".to_string()),
-        Err(e) => log::error!("Cannot mount sysfs: {:?}", e),
+        Err(e) => log::error!("{} {:?}", s!("Cannot mount sysfs:"), e),
     }
 
     AutoUmount { mountpoints }
@@ -118,7 +118,7 @@ fn unlimit_kmsg() {
     // Disable kmsg rate limiting
     if let Ok(mut rate) = std::fs::File::options()
         .write(true)
-        .open("/proc/sys/kernel/printk_devkmsg")
+        .open(s!("/proc/sys/kernel/printk_devkmsg"))
     {
         writeln!(rate, "on").ok();
     }
@@ -128,7 +128,7 @@ pub fn init() -> Result<()> {
     // Setup kernel log first
     setup_kmsg();
 
-    log::info!("Hello, KernelSU!");
+    log::info!("{}", s!("Hello, KernelSU!"));
 
     // mount /proc and /sys to access kernel interface
     let _dontdrop = prepare_mount();
@@ -137,7 +137,7 @@ pub fn init() -> Result<()> {
     unlimit_kmsg();
 
     if has_kernelsu() {
-        log::info!("KernelSU may be already loaded in kernel, skip!");
+        log::info!("{}", s!("KernelSU may be already loaded in kernel, skip!"));
     } else {
         log::info!("{}", s!("Loading kernelsu.ko.."));
         if let Err(e) = load_module(s!("/kernelsu.ko")) {
@@ -153,7 +153,7 @@ pub fn init() -> Result<()> {
         Err(_) => "/system/bin/init",
     };
 
-    log::info!("init is {}", real_init);
+    log::info!("{} {}", s!("init is"), real_init);
     symlink(real_init, "/init")?;
 
     chmodat(
@@ -179,7 +179,7 @@ fn has_kernelsu() -> bool {
         );
     }
 
-    log::info!("KernelSU version: {}", version);
+    log::info!("{}: {}", s!("KernelSU version"), version);
 
     version != 0
 }
