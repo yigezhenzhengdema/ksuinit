@@ -5,7 +5,7 @@ use scroll::{ctx::SizeWith, Pwrite};
 use std::collections::HashMap;
 use std::fs;
 
-const KPTR_RESTRICT: &str = "/proc/sys/kernel/kptr_restrict";
+use obfstr::obfstr as s;
 
 struct Kptr {
     value: String,
@@ -13,22 +13,22 @@ struct Kptr {
 
 impl Kptr {
     pub fn new() -> Result<Self> {
-        let value = fs::read_to_string(KPTR_RESTRICT)?;
-        fs::write(KPTR_RESTRICT, "1")?;
+        let value = fs::read_to_string(s!("/proc/sys/kernel/kptr_restrict"))?;
+        fs::write(s!("/proc/sys/kernel/kptr_restrict"), "1")?;
         Ok(Kptr { value })
     }
 }
 
 impl Drop for Kptr {
     fn drop(&mut self) {
-        let _ = fs::write(KPTR_RESTRICT, self.value.as_bytes());
+        let _ = fs::write(s!("/proc/sys/kernel/kptr_restrict"), self.value.as_bytes());
     }
 }
 
 fn parse_kallsyms() -> Result<HashMap<String, u64>> {
     let _dontdrop = Kptr::new()?;
 
-    let allsyms = fs::read_to_string("/proc/kallsyms")?
+    let allsyms = fs::read_to_string(s!("/proc/kallsyms"))?
         .lines()
         .map(|line| line.split_whitespace())
         .filter_map(|mut splits| {
@@ -52,10 +52,12 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
 }
 
 pub fn load_module(path: &str) -> Result<()> {
-    let mut buffer = fs::read(path).with_context(|| format!("Cannot read file: {path}"))?;
+    let mut buffer =
+        fs::read(path).with_context(|| format!("{} {}", s!("Cannot read file"), path))?;
     let elf = Elf::parse(&buffer)?;
 
-    let kernel_symbols = parse_kallsyms().with_context(|| format!("Cannot parse kallsyms"))?;
+    let kernel_symbols =
+        parse_kallsyms().with_context(|| s!("Cannot parse kallsyms").to_string())?;
 
     let mut modifications = Vec::new();
     for (index, mut sym) in elf.syms.iter().enumerate() {
@@ -73,7 +75,7 @@ pub fn load_module(path: &str) -> Result<()> {
 
         let offset = elf.syms.offset() + index * Sym::size_with(elf.syms.ctx());
         let Some(real_addr) = kernel_symbols.get(name) else {
-            log::warn!("Cannot found symbol: {}", &name);
+            log::warn!("{}: {}", s!("Cannot found symbol"), &name);
             continue;
         };
         sym.st_shndx = section_header::SHN_ABS as usize;
@@ -85,6 +87,6 @@ pub fn load_module(path: &str) -> Result<()> {
     for ele in modifications {
         buffer.pwrite_with(ele.0, ele.1, ctx)?;
     }
-    init_module(&buffer, cstr!("")).with_context(|| format!("init_module failed."))?;
+    init_module(&buffer, cstr!("")).with_context(|| s!("init_module failed.").to_string())?;
     Ok(())
 }

@@ -12,6 +12,8 @@ use rustix::{
     },
 };
 
+use obfstr::obfstr as s;
+
 struct AutoUmount {
     mountpoints: Vec<String>,
 }
@@ -137,9 +139,9 @@ pub fn init() -> Result<()> {
     if has_kernelsu() {
         log::info!("KernelSU may be already loaded in kernel, skip!");
     } else {
-        log::info!("Loading kernelsu.ko..");
-        if let Err(e) = load_module("/kernelsu.ko") {
-            log::error!("Cannot load kernelsu.ko: {}", e);
+        log::info!("{}", s!("Loading kernelsu.ko.."));
+        if let Err(e) = load_module(s!("/kernelsu.ko")) {
+            log::error!("{}: {}", s!("Cannot load kernelsu.ko"), e);
         }
     }
 
