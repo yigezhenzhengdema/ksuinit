@@ -27,3 +27,4 @@ kernlog = { git = "https://github.com/tiann/kernlog.rs" }
 strip = true
 lto = true
 opt-level = "z"
+panic = "abort"
