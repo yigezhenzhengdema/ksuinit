@@ -40,7 +40,7 @@ fn parse_kallsyms() -> Result<HashMap<String, u64>> {
         .map(|(symbol, addr)| {
             (
                 symbol
-                    .find(['$', '.'])
+                    .find(['$'])
                     .map_or(symbol, |pos| &symbol[0..pos])
                     .to_owned(),
                 addr,
