@@ -12,7 +12,8 @@ goblin = { git = "https://github.com/tiann/goblin" }
 scroll = "0.12"
 
 anyhow = "1"
-rustix = { git = "https://github.com/bytecodealliance/rustix", rev = "7b44528", features = ["mount", "fs", "runtime", "system", "process"] }
+# rustix = { git = "https://github.com/bytecodealliance/rustix", rev = "7b44528", features = ["mount", "fs", "runtime", "system", "process"] }
+rustix = { git = "https://github.com/Kernel-SU/rustix.git", rev = "4a53fbc", features = ["mount", "fs", "runtime", "system", "process"] }
 
 syscalls = { version = "0.6", default-features = false, features = [
     "aarch64",
